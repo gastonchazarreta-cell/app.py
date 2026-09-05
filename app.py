@@ -947,4 +947,51 @@ nombre_mercado_corners = f"{nombre_base_corners} Córners"
 model_prob_tarjetas, nombre_base_tarjetas = calculate_over_under(
     tipo_apuesta_tarjetas,
     total_cards,
- 
+    linea_tarjetas
+)
+
+nombre_mercado_tarj = f"{nombre_base_tarjetas} Tarjetas"
+
+
+# ==============================================================================
+# ANÁLISIS DE VALUE
+# ==============================================================================
+
+analisis = [
+
+    analyze_market(
+        nombre_mercado_goles,
+        model_prob_goles,
+        market_odds_goles
+    ),
+
+    analyze_market(
+        "BTTS Sí",
+        btts_yes,
+        market_odds_btts
+    ),
+
+    analyze_market(
+        nombre_mercado_remates,
+        model_prob_remates,
+        market_odds_remates
+    ),
+
+    analyze_market(
+        nombre_mercado_sot,
+        model_prob_sot,
+        market_odds_sot
+    ),
+
+    analyze_market(
+        nombre_mercado_corners,
+        model_prob_corners,
+        market_odds_corners
+    ),
+
+    analyze_market(
+        nombre_mercado_tarj,
+        model_prob_tarjetas,
+        market_odds_tarjetas
+    )
+]
