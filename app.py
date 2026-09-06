@@ -1,6 +1,4 @@
-
 import math
-import json
 from datetime import date
 
 import streamlit as st
@@ -18,93 +16,6 @@ st.set_page_config(
     page_icon="⚽",
     layout="wide",
 )
-
-DEFAULT_DB = {
-    "Argentina - Liga Profesional": {
-        "Boca Juniors": {
-            "data": [1.50, 1.35, 1.00, 15.2, 5.8, 6.0, 2.8, 14.5],
-            "updated": "2026-09-05",
-        },
-        "River Plate": {
-            "data": [1.65, 1.45, 0.95, 16.5, 6.2, 6.5, 2.2, 12.0],
-            "updated": "2026-09-05",
-        },
-        "San Lorenzo": {
-            "data": [1.20, 1.10, 1.15, 11.5, 4.0, 4.5, 3.1, 15.0],
-            "updated": "2026-09-05",
-        },
-    },
-    "Brasil - Serie A": {},
-    "España - LaLiga": {},
-    "Inglaterra - Premier League": {},
-    "Italia - Serie A": {},
-    "Otro": {
-        "Personalizado / Nuevo": {
-            "data": [1.45, 1.30, 1.10, 14.0, 5.0, 5.5, 2.4, 13.0],
-            "updated": "2026-09-05",
-        }
-    },
-}
-
-DATA_LABELS = [
-    "xG",
-    "xG sin penaltis",
-    "xGA",
-    "Tiros totales",
-    "Tiros al arco",
-    "Córners",
-    "Amarillas",
-    "Faltas",
-]
-
-
-def normalize_db(db):
-    """Admite la nueva estructura y también convierte la base vieja si aparece."""
-    if not isinstance(db, dict):
-        return DEFAULT_DB.copy()
-
-    # Nueva estructura: liga -> equipo -> {"data": [...], "updated": "..."}
-    new_ok = True
-    for league, teams in db.items():
-        if not isinstance(teams, dict):
-            new_ok = False
-            break
-        for team, info in teams.items():
-            if not isinstance(info, dict) or "data" not in info:
-                new_ok = False
-                break
-            if not isinstance(info["data"], list) or len(info["data"]) != 8:
-                new_ok = False
-                break
-        if not new_ok:
-            break
-
-    if new_ok:
-        return db
-
-    # Conversión de la estructura vieja:
-    # {"Boca Juniors": [....], "River Plate": [....]}
-    converted = {
-        "Argentina - Liga Profesional": {},
-        "Brasil - Serie A": {},
-        "España - LaLiga": {},
-        "Inglaterra - Premier League": {},
-        "Italia - Serie A": {},
-        "Otro": {},
-    }
-
-    for team, values in db.items():
-        if isinstance(values, list) and len(values) == 8:
-            converted["Otro"][str(team)] = {
-                "data": [float(x) for x in values],
-                "updated": date.today().isoformat(),
-            }
-
-    return converted
-
-
-if "equipos_db" not in st.session_state:
-    st.session_state.equipos_db = normalize_db(DEFAULT_DB)
 
 if "historial" not in st.session_state:
     st.session_state.historial = []
@@ -188,73 +99,6 @@ def calculate_over_under(tipo, total, linea):
 
 
 # ==============================================================================
-# FUNCIONES DE BASE DE EQUIPOS
-# ==============================================================================
-
-def leagues():
-    return list(st.session_state.equipos_db.keys())
-
-
-def teams_in(league):
-    return list(st.session_state.equipos_db.get(league, {}).keys())
-
-
-def get_team_info(league, team):
-    return st.session_state.equipos_db.get(league, {}).get(team)
-
-
-def set_loaded_values(prefix, values):
-    keys = [
-        "xg", "xg_np", "xga", "shots",
-        "sot", "corners", "yellow", "fouls"
-    ]
-    for key, value in zip(keys, values):
-        st.session_state[f"{prefix}_{key}"] = float(value)
-
-
-def load_team_callback(prefix):
-    league = st.session_state[f"{prefix}_league"]
-    team = st.session_state[f"{prefix}_team"]
-    info = get_team_info(league, team)
-    if info:
-        set_loaded_values(prefix, info["data"])
-
-
-def save_team(prefix):
-    league = st.session_state[f"{prefix}_league"]
-    team = st.session_state[f"{prefix}_team"]
-    if team == "➕ Otro equipo...":
-        team = st.session_state.get(f"{prefix}_other_name", "").strip()
-
-    if not team:
-        st.error("Escribí el nombre del equipo.")
-        return
-
-    values = [
-        st.session_state[f"{prefix}_xg"],
-        st.session_state[f"{prefix}_xg_np"],
-        st.session_state[f"{prefix}_xga"],
-        st.session_state[f"{prefix}_shots"],
-        st.session_state[f"{prefix}_sot"],
-        st.session_state[f"{prefix}_corners"],
-        st.session_state[f"{prefix}_yellow"],
-        st.session_state[f"{prefix}_fouls"],
-    ]
-
-    if league not in st.session_state.equipos_db:
-        st.session_state.equipos_db[league] = {}
-
-    st.session_state.equipos_db[league][team] = {
-        "data": values,
-        "updated": date.today().isoformat(),
-    }
-
-    # Si se estaba usando "Otro", dejamos el equipo creado y lo seleccionamos
-    st.session_state[f"{prefix}_saved_team"] = team
-    st.success(f"✅ {team} guardado en {league}.")
-
-
-# ==============================================================================
 # TÍTULO
 # ==============================================================================
 
@@ -266,51 +110,10 @@ st.caption(
 
 
 # ==============================================================================
-# SIDEBAR: BASE / IMPORTAR / EXPORTAR
+# PARTIDO / ENTRADA DE DATOS MANUAL
 # ==============================================================================
 
-with st.sidebar:
-    st.header("🗂️ Base de equipos")
-
-    export_json = json.dumps(
-        st.session_state.equipos_db,
-        indent=2,
-        ensure_ascii=False
-    )
-
-    st.download_button(
-        "📥 Descargar base completa",
-        data=export_json,
-        file_name="football_valuestat_base.json",
-        mime="application/json",
-        use_container_width=True,
-    )
-
-    uploaded = st.file_uploader(
-        "📤 Importar base completa",
-        type=["json"],
-    )
-
-    if uploaded is not None:
-        try:
-            imported = json.load(uploaded)
-            st.session_state.equipos_db = normalize_db(imported)
-            st.success("Base importada correctamente.")
-            st.rerun()
-        except Exception as e:
-            st.error(f"No se pudo importar la base: {e}")
-
-    st.divider()
-    st.caption(
-        "La base contiene ligas, equipos, 8 estadísticas y fecha de actualización."
-    )
-
-
-# ==============================================================================
-# PARTIDO / SELECCIÓN DE EQUIPOS
-# ==============================================================================
-
-st.header("🏆 Partido")
+st.header("🏆 Partido y Equipos")
 
 competition = st.selectbox(
     "Competición del partido",
@@ -327,143 +130,45 @@ competition = st.selectbox(
 
 left, right = st.columns(2)
 
+with left:
+    home_team = st.text_input("Nombre Equipo Local", "Local")
 
-def team_selector(prefix, title):
-    st.subheader(title)
-
-    league_options = leagues()
-    league_key = f"{prefix}_league"
-
-    if league_key not in st.session_state:
-        st.session_state[league_key] = league_options[0]
-
-    league = st.selectbox(
-        "Liga del equipo",
-        league_options,
-        key=league_key,
-        on_change=load_team_callback,
-        args=(prefix,),
-    )
-
-    saved_teams = teams_in(league)
-    team_options = saved_teams + ["➕ Otro equipo..."]
-
-    team_key = f"{prefix}_team"
-    if team_key not in st.session_state or st.session_state[team_key] not in team_options:
-        st.session_state[team_key] = team_options[0]
-
-    team = st.selectbox(
-        "Equipo",
-        team_options,
-        key=team_key,
-        on_change=load_team_callback,
-        args=(prefix,),
-    )
-
-    if team == "➕ Otro equipo...":
-        other_name = st.text_input(
-            "Nombre del equipo",
-            key=f"{prefix}_other_name",
-        )
-        info = None
-    else:
-        info = get_team_info(league, team)
-        if info:
-            st.caption(f"📅 Última actualización: {info.get('updated', 'sin fecha')}")
-
-    return league, team, info
+with right:
+    away_team = st.text_input("Nombre Equipo Visitante", "Visitante")
 
 
-home_league, home_team_selected, home_info = team_selector("home", "🏠 Local")
-away_league, away_team_selected, away_info = team_selector("away", "✈️ Visitante")
-
-
-# ==============================================================================
-# DATOS DE EQUIPOS
-# ==============================================================================
-
-def render_data_inputs(prefix, info, title):
+def render_data_inputs(prefix, title, default_vals):
     st.divider()
     st.subheader(title)
-
-    if info and f"{prefix}_xg" not in st.session_state:
-        set_loaded_values(prefix, info["data"])
-
-    defaults = info["data"] if info else [1.45, 1.30, 1.10, 14.0, 5.0, 5.5, 2.4, 13.0]
-
-    def val(key, idx):
-        return float(st.session_state.get(f"{prefix}_{key}", defaults[idx]))
 
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
-        st.number_input("xG", min_value=0.0, value=val("xg", 0), step=0.05, key=f"{prefix}_xg")
-        st.number_input("xG sin penal", min_value=0.0, value=val("xg_np", 1), step=0.05, key=f"{prefix}_xg_np")
+        xg = st.number_input("xG", min_value=0.0, value=default_vals[0], step=0.05, key=f"{prefix}_xg")
+        xg_np = st.number_input("xG sin penal", min_value=0.0, value=default_vals[1], step=0.05, key=f"{prefix}_xg_np")
 
     with c2:
-        st.number_input("xGA", min_value=0.0, value=val("xga", 2), step=0.05, key=f"{prefix}_xga")
-        st.number_input("Tiros totales", min_value=0.0, value=val("shots", 3), step=0.5, key=f"{prefix}_shots")
+        xga = st.number_input("xGA", min_value=0.0, value=default_vals[2], step=0.05, key=f"{prefix}_xga")
+        shots = st.number_input("Tiros totales", min_value=0.0, value=default_vals[3], step=0.5, key=f"{prefix}_shots")
 
     with c3:
-        st.number_input("Tiros al arco", min_value=0.0, value=val("sot", 4), step=0.5, key=f"{prefix}_sot")
-        st.number_input("Córners", min_value=0.0, value=val("corners", 5), step=0.5, key=f"{prefix}_corners")
+        sot = st.number_input("Tiros al arco", min_value=0.0, value=default_vals[4], step=0.5, key=f"{prefix}_sot")
+        corners = st.number_input("Córners", min_value=0.0, value=default_vals[5], step=0.5, key=f"{prefix}_corners")
 
     with c4:
-        st.number_input("Amarillas", min_value=0.0, value=val("yellow", 6), step=0.1, key=f"{prefix}_yellow")
-        st.number_input("Faltas", min_value=0.0, value=val("fouls", 7), step=0.5, key=f"{prefix}_fouls")
+        yellow = st.number_input("Amarillas", min_value=0.0, value=default_vals[6], step=0.1, key=f"{prefix}_yellow")
+        fouls = st.number_input("Faltas", min_value=0.0, value=default_vals[7], step=0.5, key=f"{prefix}_fouls")
+
+    return xg, xg_np, xga, shots, sot, corners, yellow, fouls
 
 
-render_data_inputs(
-    "home",
-    home_info,
-    f"📊 Datos — {home_team_selected}",
+h_xg, h_xg_nonpen, h_xga, h_shots, h_sot, h_corners, h_yellow, h_fouls = render_data_inputs(
+    "home", f"📊 Datos — {home_team}", [1.45, 1.30, 1.10, 14.0, 5.0, 5.5, 2.4, 13.0]
 )
 
-render_data_inputs(
-    "away",
-    away_info,
-    f"📊 Datos — {away_team_selected}",
+a_xg, a_xg_nonpen, a_xga, a_shots, a_sot, a_corners, a_yellow, a_fouls = render_data_inputs(
+    "away", f"📊 Datos — {away_team}", [1.15, 1.00, 1.35, 11.0, 3.8, 4.2, 2.7, 14.2]
 )
-
-
-# ==============================================================================
-# GUARDAR EQUIPOS
-# ==============================================================================
-
-s1, s2 = st.columns(2)
-
-with s1:
-    if st.button("💾 Guardar / actualizar LOCAL", use_container_width=True):
-        save_team("home")
-        st.rerun()
-
-with s2:
-    if st.button("💾 Guardar / actualizar VISITANTE", use_container_width=True):
-        save_team("away")
-        st.rerun()
-
-
-# ==============================================================================
-# TOMAR DATOS PARA EL MODELO
-# ==============================================================================
-
-h_xg = st.session_state["home_xg"]
-h_xg_nonpen = st.session_state["home_xg_np"]
-h_xga = st.session_state["home_xga"]
-h_shots = st.session_state["home_shots"]
-h_sot = st.session_state["home_sot"]
-h_corners = st.session_state["home_corners"]
-h_yellow = st.session_state["home_yellow"]
-h_fouls = st.session_state["home_fouls"]
-
-a_xg = st.session_state["away_xg"]
-a_xg_nonpen = st.session_state["away_xg_np"]
-a_xga = st.session_state["away_xga"]
-a_shots = st.session_state["away_shots"]
-a_sot = st.session_state["away_sot"]
-a_corners = st.session_state["away_corners"]
-a_yellow = st.session_state["away_yellow"]
-a_fouls = st.session_state["away_fouls"]
 
 
 # ==============================================================================
@@ -544,8 +249,8 @@ m4.metric("🚩 Córners", f"{total_corners:.2f}")
 
 st.info(
     f"**Proyección de goles**\n\n"
-    f"{home_team_selected}: **{home_goals:.2f}**  \n"
-    f"{away_team_selected}: **{away_goals:.2f}**  \n\n"
+    f"{home_team}: **{home_goals:.2f}**  \n"
+    f"{away_team}: **{away_goals:.2f}**  \n\n"
     f"Tarjetas esperadas: **{total_cards:.2f}**"
 )
 
@@ -571,8 +276,8 @@ fig = go.Figure(
         text=np.vectorize(lambda x: f"{x:.1f}%")(heat_matrix),
         texttemplate="%{text}",
         hovertemplate=(
-            f"{home_team_selected}: %{{y}}<br>"
-            f"{away_team_selected}: %{{x}}<br>"
+            f"{home_team}: %{{y}}<br>"
+            f"{away_team}: %{{x}}<br>"
             "Probabilidad: %{z:.2f}%<extra></extra>"
         ),
         colorscale="YlOrRd",
@@ -581,8 +286,8 @@ fig = go.Figure(
 )
 
 fig.update_layout(
-    xaxis_title=f"Goles {away_team_selected}",
-    yaxis_title=f"Goles {home_team_selected}",
+    xaxis_title=f"Goles {away_team}",
+    yaxis_title=f"Goles {home_team}",
     height=500,
     margin=dict(l=20, r=20, t=30, b=20),
 )
@@ -726,9 +431,9 @@ st.divider()
 st.header("🎯 Probabilidades 1X2")
 
 r1, r2, r3 = st.columns(3)
-r1.metric(home_team_selected, f"{result_probs[0] * 100:.1f}%")
+r1.metric(home_team, f"{result_probs[0] * 100:.1f}%")
 r2.metric("Empate", f"{result_probs[1] * 100:.1f}%")
-r3.metric(away_team_selected, f"{result_probs[2] * 100:.1f}%")
+r3.metric(away_team, f"{result_probs[2] * 100:.1f}%")
 
 
 # ==============================================================================
@@ -745,8 +450,8 @@ with h1:
         st.session_state.historial.append({
             "Fecha": date.today().isoformat(),
             "Competición": competition,
-            "Local": home_team_selected,
-            "Visitante": away_team_selected,
+            "Local": home_team,
+            "Visitante": away_team,
             "Goles esperados": round(total_goals, 2),
             "Remates": round(total_shots, 2),
             "Remates al arco": round(total_sot, 2),
@@ -767,17 +472,13 @@ COMPETICIÓN
 {competition}
 
 PARTIDO
-{home_team_selected} vs {away_team_selected}
-
-LIGAS
-Local: {home_league}
-Visitante: {away_league}
+{home_team} vs {away_team}
 
 PROYECCIONES
 ------------------------------------------
 Goles esperados: {total_goals:.2f}
-{home_team_selected}: {home_goals:.2f}
-{away_team_selected}: {away_goals:.2f}
+{home_team}: {home_goals:.2f}
+{away_team}: {away_goals:.2f}
 Remates: {total_shots:.2f}
 Remates al arco: {total_sot:.2f}
 Córners: {total_corners:.2f}
@@ -800,7 +501,7 @@ Señal: {mejor['Señal']}
     st.download_button(
         "📄 Descargar informe TXT",
         data=report,
-        file_name=f"informe_{home_team_selected}_vs_{away_team_selected}.txt".replace(" ", "_"),
+        file_name=f"informe_{home_team}_vs_{away_team}.txt".replace(" ", "_"),
         mime="text/plain",
         use_container_width=True,
     )
